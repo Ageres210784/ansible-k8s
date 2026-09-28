@@ -1,0 +1,153 @@
+---
+- name: Check swap
+  ansible.builtin.command: swapon --show --noheadings
+  register: swap_ret
+  changed_when: false
+
+- name: Disable swap
+  ansible.builtin.command: swapoff -a
+  when: swap_ret.stdout != ""
+
+- name: Disable swap in fstab
+  when: swap_ret.stdout != ""
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\s*swap\s*.*)$'
+    replace: '# \1'
+
+- name: Ensure modules
+  community.general.modprobe:
+    name: "{{ item }}"
+  with_items: "{{ k8s_modules }}"
+  # ignore_errors: true
+
+- name: Ensure modules if host restarts
+  ansible.builtin.copy:
+    content: "{{ k8s_modules | join('\n') }}\n"
+    dest: /etc/modules-load.d/modules-kubernetes.conf
+    owner: root
+    mode: '0644'
+
+- name: Configure sysctl
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+  # bridge-nf-call-* могут отсутствовать на ядрах 6.12+ (нет br_netfilter)
+  # ignore_errors: true
+  loop:
+    - name: net.ipv4.ip_forward
+      value: 1
+    - name: net.bridge.bridge-nf-call-iptables
+      value: 1
+    - name: net.bridge.bridge-nf-call-ip6tables
+      value: 1
+    - name: vm.max_map_count
+      value: 262144
+
+- name: Ensure old versions of Docker are not installed.
+  ansible.builtin.apt:
+    name:
+      - docker
+      - docker.io
+      - docker-engine
+    state: absent
+
+- name: Add Docker apt key
+  ansible.builtin.apt_key:
+    url: "https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}/gpg"
+    state: present
+    keyring: /etc/apt/trusted.gpg.d/docker.gpg
+
+- name: Docker repository for Ubuntu
+  ansible.builtin.apt_repository:
+    repo: >
+      deb [signed-by=/etc/apt/trusted.gpg.d/docker.gpg]
+      https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}
+      {{ ansible_facts['distribution_release'] }} stable
+    state: present
+    filename: docker-ce-stable
+
+- name: Add Kubernetes apt key
+  ansible.builtin.apt_key:
+    url: "https://prod-cdn.packages.k8s.io/repositories/isv:/kubernetes:/core:/stable:/v{{ k8s_version.split('.')[:2] | join('.') }}/deb/Release.key"
+    state: present
+    keyring: /etc/apt/trusted.gpg.d/k8s.gpg
+
+- name: Add Kubernetes repository
+  ansible.builtin.apt_repository:
+    repo: >
+      deb [signed-by=/etc/apt/trusted.gpg.d/k8s.gpg]
+      https://prod-cdn.packages.k8s.io/repositories/isv:/kubernetes:/core:/stable:/v{{ k8s_version.split('.')[:2] | join('.') }}/deb/ /
+    state: present
+    filename: kubernetes
+
+- name: Install packages
+  ansible.builtin.apt:
+    name: "{{ k8s_packages }}"
+
+- name: Fixing packages Kubernetes
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+
+- name: Start NTP server
+  ansible.builtin.service:
+    name: "chronyd"
+    state: started
+    enabled: true
+
+- name: Ensure crictl.yaml
+  ansible.builtin.template:
+    src: crictl.j2
+    dest: /etc/crictl.yaml
+    owner: root
+    mode: '0644'
+
+- name: Install containerd
+  ansible.builtin.apt:
+    name: containerd
+
+- name: Ensure /etc/containerd directory exists
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+
+- name: Ensure containerd config.toml
+  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+  notify: Restart containerd
+
+- name: Ensure cgroup v2 in config.toml
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*SystemdCgroup = false'
+    line: "    SystemdCgroup = true"
+  notify: Restart containerd
+
+- name: Ensure certificates dir in config.toml
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*config_path = ""'
+    line: '    config_path = "/etc/containerd/certs.d"'
+  notify: Restart containerd
+
+- name: Ensure sandbox image in config.toml
+  when: k8s_sandbox_image != ""
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*sandbox_image = ".*"'
+    line: '    sandbox_image = "{{ k8s_sandbox_image }}"'
+  notify: Restart containerd
+
+- name: Enable and start Containerd service
+  ansible.builtin.service:
+    name: containerd
+    state: started
+    enabled: true

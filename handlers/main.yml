@@ -1,2 +1,15 @@
 ---
-# handlers file for k8s
+- name: Reload haproxy
+  ansible.builtin.service:
+    name: haproxy
+    state: reloaded
+
+- name: Restart keepalived
+  ansible.builtin.service:
+    name: keepalived
+    state: restarted
+
+- name: Restart containerd
+  ansible.builtin.service:
+    name: containerd
+    state: restarted

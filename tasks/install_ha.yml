@@ -1,0 +1,39 @@
+---
+- name: Ensure sysctl ip_nonlocal_bind
+  ansible.posix.sysctl:
+    name: "net.ipv4.ip_nonlocal_bind"
+    value: "1"
+    sysctl_set: true
+    state: present
+    ignoreerrors: true
+
+- name: Ensure HA packages
+  ansible.builtin.apt:
+    name:
+      - keepalived
+      - haproxy
+    state: present
+
+- name: Ensure keepalived.conf
+  ansible.builtin.template:
+    src: keepalived.j2
+    dest: /etc/keepalived/keepalived.conf
+    mode: '0600'
+  notify: Restart keepalived
+
+- name: Ensure haproxy.cfg
+  ansible.builtin.template:
+    src: haproxy.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: '0600'
+  register: haproxy_conf
+  notify: Reload haproxy
+
+- name: Enable keepalived and haproxy
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - keepalived
+    - haproxy

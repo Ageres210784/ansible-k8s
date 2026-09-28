@@ -1,2 +1,10 @@
 ---
-# tasks file for k8s
+- name: Install kubernetes
+  ansible.builtin.import_tasks: install_kubernetes.yml
+  tags: install
+
+- name: Install ha
+  ansible.builtin.import_tasks: install_ha.yml
+  tags:
+    - never
+    - install_ha
