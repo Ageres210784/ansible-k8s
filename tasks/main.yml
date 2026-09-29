@@ -5,6 +5,14 @@
 
 - name: Install ha
   ansible.builtin.import_tasks: install_ha.yml
-  tags:
-    - never
-    - install_ha
+  when: k8s_ha_cluster_virtual_ip != ""
+  tags: install_ha
+
+- name: Start first control node
+  ansible.builtin.import_tasks: start_master.yml
+  run_once: true
+  tags: master
+
+- name: Join nodes to kubernetes cluster
+  ansible.builtin.import_tasks: join_nodes.yml
+  tags: join

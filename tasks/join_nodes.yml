@@ -1,0 +1,90 @@
+---
+- name: Check if cluster already initialised
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: _kubelet_conf
+
+- name: Determine the initialised master
+  ansible.builtin.set_fact:
+    _master: >-
+      {{
+        ansible_play_hosts
+        | map('extract', hostvars)
+        | selectattr('_kubelet_conf.stat.exists', 'equalto', true)
+        | map(attribute='inventory_hostname')
+        | list
+        | first
+        | default('')
+      }}
+  run_once: true
+
+- name: Fail if no initialised master found
+  ansible.builtin.fail:
+    msg: "No one node has /etc/kubernetes/kubelet.conf"
+  when: _master == ''
+  run_once: true
+
+- name: Prepare in master
+  when: inventory_hostname == _master
+  block:
+    - name: Generate token
+      ansible.builtin.command: kubeadm token create
+      register: _join_token
+
+    - name: Get discovery-token-ca-cert-hash
+      ansible.builtin.shell: >-
+        openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt
+        | openssl rsa -pubin -outform der 2>/dev/null
+        | openssl dgst -sha256 -hex
+        | sed 's/^.* //'
+      register: _discovery_token_ca_cert_hash
+
+    - name: Get certificate
+      ansible.builtin.shell: |
+        kubeadm init phase upload-certs --upload-certs | tail -1
+      register: _certificate_key
+      when: etcd_mode is not defined or etcd_mode == "stacked"
+
+    - name: Get API server address
+      ansible.builtin.shell: |
+        kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' | cut -d'/' -f3
+      register: _join_path
+
+- name: Join to master
+  when: not _kubelet_conf.stat.exists
+  block:
+    - name: Ensure directory /etc/kubernetes
+      ansible.builtin.file:
+        path: /etc/kubernetes
+        state: directory
+        mode: '0700'
+    - name: Ensure kubeadm-config.yaml
+      ansible.builtin.template:
+        src: kubeadm-join-config.j2
+        dest: /etc/kubernetes/kubeadm-join-config.yaml
+        mode: '0600'
+
+    - name: Join control node
+      ansible.builtin.command: |
+        kubeadm join --config /etc/kubernetes/kubeadm-join-config.yaml
+
+    - name: Add directory for config file
+      ansible.builtin.file:
+        path: /root/.kube
+        state: directory
+        mode: '0700'
+    - name: Add link for config file
+      ansible.builtin.file:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        state: link
+
+    - name: Ensure kubelet service
+      ansible.builtin.service:
+        name: kubelet
+        state: started
+        enabled: true
+
+- name: Restart coredns
+  ansible.builtin.command: kubectl -n kube-system rollout restart deployment/coredns
+  when: inventory_hostname == _master

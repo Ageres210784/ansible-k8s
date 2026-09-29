@@ -1,0 +1,64 @@
+---
+# InitConfiguration — first node params
+apiVersion: {{ k8s_api_version }}
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {{ ansible_facts.default_ipv4.address }}
+  bindPort: 6443
+nodeRegistration:
+  criSocket: {{ k8s_cri_socket }}
+  imagePullPolicy: IfNotPresent
+  name: {{ ansible_facts.nodename }}
+  taints: {{ k8s_taints }}
+---
+# ClusterConfiguration — cluster main params
+apiVersion: {{ k8s_api_version }}
+kind: ClusterConfiguration
+certificatesDir: /etc/kubernetes/pki
+clusterName: {{ k8s_domain_name }}
+imageRepository: {{ k8s_image_repository }}
+kubernetesVersion: {{ k8s_version }}
+{% if k8s_control_plane_endpoint != "" %}
+# First prioriti controlPlaneEndpoint
+controlPlaneEndpoint: {{ k8s_control_plane_endpoint }}
+{% elif k8s_ha_cluster_virtual_ip != "" %}
+# HA — virtual IP with HAProxy + Keepalived
+controlPlaneEndpoint: {{ k8s_ha_cluster_virtual_ip }}:{{ k8s_ha_cluster_virtual_port }}
+{% else %}
+# Single-node — API address
+controlPlaneEndpoint: {{ ansible_facts.default_ipv4.address }}:6443
+{% endif %}
+networking:
+  dnsDomain: {{ k8s_domain_name }}
+  podSubnet: {{ k8s_pod_network_cidr }}
+  serviceSubnet: {{ k8s_service_cidr }}
+---
+# KubeProxyConfiguration — kube-proxy config (iptables mode)
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+clusterCIDR: {{ k8s_pod_network_cidr }}
+iptables:
+  masqueradeAll: false
+  masqueradeBit: 14
+  minSyncPeriod: 0s
+  syncPeriod: 30s
+mode: iptables
+---
+# KubeletConfiguration — kubelet params
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+# DNS — use NodeLocalDNS
+clusterDNS:
+- {{ k8s_nodelocaldns_local_ip }}
+# Reserved resources for system daemons
+{% if k8s_system_reserved %}
+systemReserved:
+  memory: {{ k8s_system_memory_reserved }}
+  cpu: {{ k8s_system_cpu_reserved }}
+{% if system_ephemeral_storage_reserved is defined %}
+  ephemeral-storage: {{ system_ephemeral_storage_reserved }}
+{% endif %}
+{% endif %}
+# Log limits
+containerLogMaxSize: {{ k8s_container_log_max_size }}
+containerLogMaxFiles: {{ k8s_container_log_max_files }}

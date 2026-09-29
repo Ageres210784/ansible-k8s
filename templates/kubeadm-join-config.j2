@@ -1,0 +1,18 @@
+---
+apiVersion: {{ k8s_api_version }}
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    apiServerEndpoint: {{ hostvars[_master]._join_path.stdout }}
+    token: {{ hostvars[_master]._join_token.stdout }}
+    caCertHashes: ["sha256:{{ hostvars[_master]._discovery_token_ca_cert_hash.stdout }}"]
+controlPlane:
+  localAPIEndpoint:
+    advertiseAddress: {{ ansible_facts.default_ipv4.address }}
+    bindPort: 6443
+  certificateKey: {{ hostvars[_master]._certificate_key.stdout }}
+nodeRegistration:
+  criSocket: {{ k8s_cri_socket }}
+  imagePullPolicy: IfNotPresent
+  name: {{ ansible_facts.nodename }}
+  taints: {{ k8s_taints }}

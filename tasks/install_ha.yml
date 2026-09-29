@@ -37,3 +37,6 @@
   loop:
     - keepalived
     - haproxy
+
+- name: Apply keepalived and haproxy configs
+  ansible.builtin.meta: flush_handlers
