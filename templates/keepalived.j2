@@ -1,25 +1,17 @@
 vrrp_script chk_haproxy {
-  script "killall -0 haproxy"  # проверка процесса haproxy
-  interval 2                   # каждые 2 секунды
-  weight 2                     # +2 к приоритету если OK
+  script "killall -0 haproxy"  # check haproxy
+  interval 2                   # every 2 seconds
+  weight 2                     # +2 to priority if OK
 }
 
 vrrp_instance VI_1 {
   interface {{ ansible_facts.default_ipv4.interface }}
-{% if inventory_hostname == groups['k8s_masters'][0] %}
-  state MASTER                # MASTER на первой ноде
-{% else %}
-  state BACKUP                # BACKUP на остальных
-{% endif %}
+  state BACKUP
   virtual_router_id 51
-{% if inventory_hostname == groups['k8s_masters'][0] %}
-  priority 101                # приоритет 101 на master
-{% else %}
-  priority 100                # приоритет 100 на backup
-{% endif %}
+  priority {{ k8s_ha_cluster_priority }}
 
   virtual_ipaddress {
-    {{ k8s_ha_cluster_virtual_ip }}/24          # виртуальный IP
+    {{ k8s_ha_cluster_virtual_ip }}/24          # virtual IP
   }
 
   track_script {

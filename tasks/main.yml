@@ -8,10 +8,46 @@
   when: k8s_ha_cluster_virtual_ip != ""
   tags: install_ha
 
+- name: Check if cluster already initialised
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: _kubelet_conf
+  tags:
+    - join
+    - master
+
+- name: Determine the initialised master
+  ansible.builtin.set_fact:
+    _master: >-
+      {{
+        ansible_play_hosts
+        | map('extract', hostvars)
+        | selectattr('_kubelet_conf.stat.exists', 'equalto', true)
+        | map(attribute='inventory_hostname')
+        | list
+        | first
+        | default('')
+      }}
+  run_once: true
+  tags:
+    - join
+    - master
+
 - name: Start first control node
   ansible.builtin.import_tasks: start_master.yml
+  when: _master == ''
   run_once: true
   tags: master
+
+- name: Fetch kubectl config file
+  ansible.builtin.fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: /tmp/k8s_config
+    flat: true
+  run_once: true
+  tags:
+    - get_config
+    - master
 
 - name: Join nodes to kubernetes cluster
   ansible.builtin.import_tasks: join_nodes.yml

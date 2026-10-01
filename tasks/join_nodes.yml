@@ -1,29 +1,4 @@
 ---
-- name: Check if cluster already initialised
-  ansible.builtin.stat:
-    path: /etc/kubernetes/kubelet.conf
-  register: _kubelet_conf
-
-- name: Determine the initialised master
-  ansible.builtin.set_fact:
-    _master: >-
-      {{
-        ansible_play_hosts
-        | map('extract', hostvars)
-        | selectattr('_kubelet_conf.stat.exists', 'equalto', true)
-        | map(attribute='inventory_hostname')
-        | list
-        | first
-        | default('')
-      }}
-  run_once: true
-
-- name: Fail if no initialised master found
-  ansible.builtin.fail:
-    msg: "No one node has /etc/kubernetes/kubelet.conf"
-  when: _master == ''
-  run_once: true
-
 - name: Prepare in master
   when: inventory_hostname == _master
   block:
@@ -51,7 +26,9 @@
       register: _join_path
 
 - name: Join to master
-  when: not _kubelet_conf.stat.exists
+  when:
+    - not _kubelet_conf.stat.exists
+    - inventory_hostname != _master
   block:
     - name: Ensure directory /etc/kubernetes
       ansible.builtin.file:

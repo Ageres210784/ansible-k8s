@@ -1,28 +1,14 @@
 ---
 k8s_version: "1.36.3"
 k8s_packages:
-  - net-tools
-  - gpg
-  - iproute2
-  - iptables
-  - vim
-  - bash-completion
   - nfs-common
-  - tar
   - chrony
-  - jq
-  # - ipvsadm
-  - python3-yaml
   - apt-transport-https
-  - ca-certificates
-  - python3-docker
-  - gnupg
   - containerd
   - "cri-tools={{ k8s_version.split('.')[:2] | join('.') }}.*"
   - "kubectl={{ k8s_version }}-*"
   - "kubelet={{ k8s_version }}-*"
   - "kubeadm={{ k8s_version }}-*"
-k8s_add_docker_repo: true
 k8s_cri_socket: "unix:///run/containerd/containerd.sock"
 
 k8s_modules:
@@ -39,6 +25,7 @@ k8s_ha_cluster_virtual_ip: ""
 # Example
 # k8s_ha_cluster_virtual_ip: 192.168.1.100
 k8s_ha_cluster_virtual_port: 7443
+k8s_ha_cluster_priority: ""
 
 # kubernetes configure
 k8s_domain_name: cluster.local

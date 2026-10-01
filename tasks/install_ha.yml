@@ -14,6 +14,16 @@
       - haproxy
     state: present
 
+- name: Compute auto priority (only if not set)
+  ansible.builtin.set_fact:
+    k8s_ha_cluster_priority: >-
+      {{
+        100
+        + (ansible_play_hosts | length)
+        - ((ansible_play_hosts | sort).index(inventory_hostname))
+      }}
+  when: k8s_ha_cluster_priority == ""
+
 - name: Ensure keepalived.conf
   ansible.builtin.template:
     src: keepalived.j2
