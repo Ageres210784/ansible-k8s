@@ -19,7 +19,6 @@
   community.general.modprobe:
     name: "{{ item }}"
   with_items: "{{ k8s_modules }}"
-  # ignore_errors: true
 
 - name: Ensure modules if host restarts
   ansible.builtin.copy:
@@ -89,27 +88,41 @@
     state: directory
     mode: '0755'
 
-- name: Ensure containerd config.toml
-  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
-  args: # todo исправить поведение, если файл уже есть, но неправильный, от предыдущей установки
-    creates: /etc/containerd/config.toml
-  notify: Restart containerd
+- name: Get containerd default config
+  ansible.builtin.command: containerd config default
+  register: _containerd_config_default
+  changed_when: false
 
-- name: Ensure cgroup v2 in config.toml
-  ansible.builtin.lineinfile:
-    path: /etc/containerd/config.toml
-    regexp: '^(\s*SystemdCgroup\s*=\s*)(false|true)\s*$'
-    line: '\g<1>true'
-    backrefs: true
-  notify: Restart containerd
+- name: Ensure SystemdCgroup = true in config
+  ansible.builtin.set_fact:
+    _containerd_config: >-
+      {{
+        _containerd_config_default.stdout
+        | regex_replace(
+            '^(\s*SystemdCgroup\s*=\s*)(false|true)\s*$',
+            '\g<1>true',
+            multiline=True
+          )
+      }}
 
-- name: Ensure sandbox image in config.toml
+- name: Ensure sandbox image in config
   when: k8s_sandbox_image != ""
-  ansible.builtin.lineinfile:
-    path: /etc/containerd/config.toml
-    regexp: '^(\s*sandbox\s*=\s*)(["'']).*\2'
-    line: '\g<1>\g<2>{{ k8s_sandbox_image }}\g<2>'
-    backrefs: true
+  ansible.builtin.set_fact:
+    _containerd_config: >-
+      {{
+        _containerd_config |
+        regex_replace(
+          '^(\s*sandbox\s*=\s*)(["'']).*\2',
+          '\g<1>\g<2>' ~ k8s_sandbox_image ~ '\g<2>',
+          multiline=True
+        )
+      }}
+
+- name: Write containerd config.toml
+  ansible.builtin.copy:
+    content: "{{ _containerd_config }}"
+    dest: /etc/containerd/config.toml
+    mode: "0644"
   notify: Restart containerd
 
 - name: Enable and start Containerd service
