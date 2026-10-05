@@ -1,10 +1,11 @@
 ---
 k8s_version: "1.36.3"
+k8s_add_docker_repo: true
 k8s_packages:
   - nfs-common
   - chrony
   - apt-transport-https
-  - containerd
+  - "{{ 'containerd.io' if k8s_add_docker_repo else 'containerd' }}"
   - "cri-tools={{ k8s_version.split('.')[:2] | join('.') }}.*"
   - "kubectl={{ k8s_version }}-*"
   - "kubelet={{ k8s_version }}-*"
