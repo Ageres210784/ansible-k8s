@@ -25,6 +25,7 @@ k8s_sandbox_image: ""
 k8s_ha_cluster_virtual_ip: ""
 # Example
 # k8s_ha_cluster_virtual_ip: 192.168.1.100
+k8s_haproxy_config: true
 k8s_ha_cluster_virtual_port: 7443
 k8s_ha_cluster_priority: ""
 
