@@ -18,7 +18,8 @@ defaults
 listen main
     bind {{ k8s_ha_cluster_virtual_ip }}:{{ k8s_ha_cluster_virtual_port }}
     balance     roundrobin
-{% for server in groups['k8s_masters'] %}
+{% for server in ansible_play_hosts_all
+   if hostvars[server].get('k8s_control_plane', k8s_control_plane) | bool %}
     server {{ hostvars[server]['ansible_facts'].hostname }} {{ hostvars[server]['ansible_facts'].default_ipv4.address }}:6443 check
 {% endfor %}
 

@@ -17,6 +17,8 @@ k8s_modules:
   - overlay
   - nf_conntrack
 
+k8s_control_plane: true
+
 k8s_sandbox_image: ""
 # Example
 # k8s_sandbox_image: "registry.k8s.io/pause:3.10"

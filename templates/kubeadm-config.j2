@@ -32,6 +32,21 @@ networking:
   dnsDomain: {{ k8s_domain_name }}
   podSubnet: {{ k8s_pod_network_cidr }}
   serviceSubnet: {{ k8s_service_cidr }}
+
+# Metrics endpoints for control-plane components
+controllerManager:
+  extraArgs:
+    - name: bind-address
+      value: "0.0.0.0"
+scheduler:
+  extraArgs:
+    - name: bind-address
+      value: "0.0.0.0"
+etcd:
+  local:
+    extraArgs:
+      - name: listen-metrics-urls
+        value: "http://0.0.0.0:2381"
 ---
 # KubeProxyConfiguration — kube-proxy config (iptables mode)
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
