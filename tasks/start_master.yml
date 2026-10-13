@@ -63,6 +63,15 @@
     - name: Install Calico
       ansible.builtin.command: kubectl apply -f /etc/kubernetes/calico-install.yaml
 
+    - name: Ensure nodelocaldns calico global network policy
+      ansible.builtin.template:
+        src: nodelocaldns-calico-gnp.j2
+        dest: /etc/kubernetes/nodelocaldns-calico-gnp.yaml
+        mode: '0600'
+
+    - name: Install nodelocaldns calico global network policy
+      ansible.builtin.command: kubectl apply -f /etc/kubernetes/nodelocaldns-calico-gnp.yaml
+
 - name: Wait for coredns starts
   ansible.builtin.command: "kubectl -n kube-system get svc kube-dns -o jsonpath='{.spec.clusterIP}'"
   changed_when: false
